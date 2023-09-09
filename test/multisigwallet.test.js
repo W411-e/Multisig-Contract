@@ -183,7 +183,6 @@ contract("MultisigWallet", (accounts) => {
     await walletInstance.pause({ from: accounts[0] });
     await walletInstance.createUnpauseTxn({ from: accounts[0] });
     await walletInstance.createUnpauseTxn({ from: accounts[1] });
-    await walletInstance.createUnpauseTxn({ from: accounts[1] });
     assert.equal(
       await walletInstance.paused(),
       false,
