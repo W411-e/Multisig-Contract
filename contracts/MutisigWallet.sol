@@ -101,7 +101,7 @@ contract MultiSigWallet is Pausable {
     ) {
         require(_owners.length > 1, "owners required");
         require(
-            _numConfirmationsRequired > 0 &&
+            _numConfirmationsRequired > 1 &&
                 _numConfirmationsRequired <= _owners.length,
             "invalid number of required confirmations"
         );
@@ -281,6 +281,7 @@ contract MultiSigWallet is Pausable {
     function createChangeRequirementTxn(
         uint256 numConfirmations
     ) public whenNotPaused ownerExists {
+        require(numConfirmations > 1, "confirmations should be at least 2");
         bytes memory data = abi.encodeWithSignature(
             "changeRequirement(uint256)",
             numConfirmations
@@ -308,7 +309,7 @@ contract MultiSigWallet is Pausable {
     }
 
     function createUnpauseTxn() public whenPaused ownerExists {
-        if (_unpauseVote >= numConfirmationsRequired) {
+        if (_unpauseVote == numConfirmationsRequired - 1) {
             bytes memory data = abi.encodeWithSignature("unpause()");
             (bool success, ) = address(this).call{value: 0}(data);
             require(success, "Unpause Contract failed");
