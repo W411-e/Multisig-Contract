@@ -217,6 +217,10 @@ contract MultiSigWallet is Pausable {
     }
 
     function removeOwner(address owner) public whenNotPaused onlyContract {
+        require(
+            owners.length > 2,
+            "you should at least have 3 owners to remove owner"
+        );
         isOwner[owner] = false;
         for (uint256 i = 0; i < owners.length - 1; i++)
             if (owners[i] == owner) {
@@ -232,6 +236,7 @@ contract MultiSigWallet is Pausable {
     function changeRequirement(
         uint256 _required
     ) public whenNotPaused onlyContract {
+        require(_required >= 2, "need at least 2 confirmations");
         numConfirmationsRequired = _required;
         emit ConfirmationRequirementChange(_required);
     }
