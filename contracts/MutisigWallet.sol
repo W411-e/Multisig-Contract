@@ -34,6 +34,7 @@ contract MultiSigWallet is Pausable {
         address indexed owner,
         uint256 value
     );
+    event EmergencyWithdrawETH(address receiver, address sender, uint256 value);
 
     address[] public owners;
     Transaction[] public transactions;
@@ -313,6 +314,7 @@ contract MultiSigWallet is Pausable {
             require(success, "Unpause Contract failed");
             delete _unPauseConfirmers;
             _unpauseVote = 0;
+            emit ContractUnPaused();
         } else {
             for (uint256 i = 0; i < _unPauseConfirmers.length; i++) {
                 require(
@@ -331,18 +333,25 @@ contract MultiSigWallet is Pausable {
         uint256 value
     ) public whenPaused ownerExists {
         //TODO:: may be we need to add multisig here too
+        require(USDT.balanceOf(address(this)) >= value, "Insufficient USDT");
         require(
             receiver != msg.sender && isOwner[receiver],
             "You cannot withdraw funds to that address"
         );
-        bytes memory data = abi.encodeWithSignature(
-            "transferUSDT(address,uint256)",
-            receiver,
-            value
-        );
-        (bool success, ) = address(this).call{value: 0}(data);
+        bool success = USDT.transfer(receiver, value);
         require(success, "Emergency withdraw failed");
         emit EmergencyWithdraw(receiver, msg.sender, value);
+    }
+
+    function emergencyWithdrawETH(
+        address receiver,
+        uint256 value
+    ) public whenPaused ownerExists {
+        //TODO:: may be we need to add multisig here too
+        require(address(this).balance >= value, "Insufficient ETH");
+        (bool success, ) = payable(receiver).call{value: value}("");
+        require(success, "Failed to send Ether");
+        emit EmergencyWithdrawETH(receiver, msg.sender, value);
     }
 
     function getOwners() public view returns (address[] memory) {
