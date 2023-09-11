@@ -10,11 +10,27 @@ contract MultiSigWallet is Pausable {
         uint256 indexed txIndex,
         address indexed to,
         uint256 value,
-        bytes data
+        bytes data,
+        TxType _txtype
     );
-    event ConfirmTransaction(address indexed owner, uint256 indexed txIndex);
-    event RevokeConfirmation(address indexed owner, uint256 indexed txIndex);
-    event ExecuteTransaction(address indexed owner, uint256 indexed txIndex);
+    event ConfirmTransaction(
+        address indexed owner,
+        uint256 indexed txIndex,
+        uint256 confirmations,
+        TxType _txtype
+    );
+    event RevokeConfirmation(
+        address indexed owner,
+        uint256 indexed txIndex,
+        uint256 confirmations,
+        TxType _txtype
+    );
+    event ExecuteTransaction(
+        address indexed owner,
+        uint256 indexed txIndex,
+        uint256 confirmations,
+        TxType _txtype
+    );
     event CreateOwnerAddRequest(address requestBy, address probOwner);
     event OwnerAddition(address indexed owner);
     event CreateOwnerRemoveRequest(address requestBy, address probExOwner);
@@ -47,6 +63,12 @@ contract MultiSigWallet is Pausable {
     IERC20 public USDT;
     uint256 private _unpauseVote;
 
+    enum TxType {
+        OWNER,
+        FUND,
+        CONFIRMATION
+    }
+
     struct Transaction {
         address to;
         uint256 value;
@@ -54,6 +76,7 @@ contract MultiSigWallet is Pausable {
         bool executed;
         uint256 numConfirmations;
         bool isUSDTtxn;
+        TxType txtype;
     }
 
     modifier ownerExists() {
@@ -138,7 +161,8 @@ contract MultiSigWallet is Pausable {
         address _to,
         uint256 _value,
         bytes memory _data,
-        bool _isUSDTtxn
+        bool _isUSDTtxn,
+        TxType _txtype
     ) internal {
         uint256 txIndex = transactions.length;
 
@@ -149,11 +173,19 @@ contract MultiSigWallet is Pausable {
                 data: _data,
                 executed: false,
                 numConfirmations: 1,
-                isUSDTtxn: _isUSDTtxn
+                isUSDTtxn: _isUSDTtxn,
+                txtype: _txtype
             })
         );
         isConfirmed[txIndex][msg.sender] = true;
-        emit SubmitTransaction(msg.sender, txIndex, _to, _value, _data);
+        emit SubmitTransaction(
+            msg.sender,
+            txIndex,
+            _to,
+            _value,
+            _data,
+            _txtype
+        );
     }
 
     function confirmTransaction(
@@ -172,7 +204,12 @@ contract MultiSigWallet is Pausable {
         if (transaction.numConfirmations + 1 >= numConfirmationsRequired) {
             executeTransaction(_txIndex);
         }
-        emit ConfirmTransaction(msg.sender, _txIndex);
+        emit ConfirmTransaction(
+            msg.sender,
+            _txIndex,
+            transaction.numConfirmations + 1,
+            transaction.txtype
+        );
     }
 
     function executeTransaction(uint256 _txIndex) internal {
@@ -189,7 +226,12 @@ contract MultiSigWallet is Pausable {
         );
         require(success, "tx failed");
 
-        emit ExecuteTransaction(msg.sender, _txIndex);
+        emit ExecuteTransaction(
+            msg.sender,
+            _txIndex,
+            transaction.numConfirmations,
+            transaction.txtype
+        );
     }
 
     function revokeConfirmation(
@@ -208,7 +250,12 @@ contract MultiSigWallet is Pausable {
         transaction.numConfirmations -= 1;
         isConfirmed[_txIndex][msg.sender] = false;
 
-        emit RevokeConfirmation(msg.sender, _txIndex);
+        emit RevokeConfirmation(
+            msg.sender,
+            _txIndex,
+            transaction.numConfirmations,
+            transaction.txtype
+        );
     }
 
     function addOwner(address owner) public whenNotPaused onlyContract {
@@ -262,19 +309,20 @@ contract MultiSigWallet is Pausable {
             "addOwner(address)",
             _newOwner
         );
-        submitTransaction(address(this), 0, data, false);
+        submitTransaction(address(this), 0, data, false, TxType.OWNER);
         emit CreateOwnerAddRequest(msg.sender, _newOwner);
     }
 
     function createRemoveOwnerTxn(
         address exOwner
     ) public whenNotPaused ownerExists {
+        require(owners.length > 2, "Can't create remove owner request");
         require(isOwner[exOwner], "Owner does not exist");
         bytes memory data = abi.encodeWithSignature(
             "removeOwner(address)",
             exOwner
         );
-        submitTransaction(address(this), 0, data, false);
+        submitTransaction(address(this), 0, data, false, TxType.OWNER);
         emit CreateOwnerRemoveRequest(msg.sender, exOwner);
     }
 
@@ -286,7 +334,7 @@ contract MultiSigWallet is Pausable {
             "changeRequirement(uint256)",
             numConfirmations
         );
-        submitTransaction(address(this), 0, data, false);
+        submitTransaction(address(this), 0, data, false, TxType.CONFIRMATION);
         emit CreateChangeRequirementRequest(msg.sender, numConfirmations);
     }
 
@@ -303,7 +351,7 @@ contract MultiSigWallet is Pausable {
             receiver,
             value
         );
-        submitTransaction(address(this), 0, data, true);
+        submitTransaction(address(this), 0, data, true, TxType.FUND);
         lockedAmount += value;
         emit CreateTransferRequest(receiver, value);
     }
