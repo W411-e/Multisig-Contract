@@ -100,7 +100,10 @@ contract MultiSigWallet is Pausable {
     }
 
     modifier notConfirmed(uint256 _txIndex) {
-        require(!isConfirmed[_txIndex][msg.sender], "tx already confirmed");
+        require(
+            !isConfirmed[_txIndex][msg.sender],
+            "tx already confirmed by this owner"
+        );
         _;
     }
 
@@ -141,6 +144,20 @@ contract MultiSigWallet is Pausable {
 
         numConfirmationsRequired = _numConfirmationsRequired;
         USDT = IERC20(usdt);
+        bytes memory data = abi.encodeWithSignature(
+            "settingLengthTo1()" // this is dummy data so that it won't get executed and we are using it to set the length of array to 1
+        );
+        transactions.push(
+            Transaction({
+                to: address(0),
+                value: 0,
+                data: data,
+                executed: false,
+                numConfirmations: 0,
+                isUSDTtxn: false,
+                txtype: TxType.OWNER
+            })
+        );
     }
 
     function pause() public ownerExists {
@@ -203,13 +220,14 @@ contract MultiSigWallet is Pausable {
         isConfirmed[_txIndex][msg.sender] = true;
         if (transaction.numConfirmations + 1 >= numConfirmationsRequired) {
             executeTransaction(_txIndex);
+        } else {
+            emit ConfirmTransaction(
+                msg.sender,
+                _txIndex,
+                transaction.numConfirmations + 1,
+                transaction.txtype
+            );
         }
-        emit ConfirmTransaction(
-            msg.sender,
-            _txIndex,
-            transaction.numConfirmations + 1,
-            transaction.txtype
-        );
     }
 
     function executeTransaction(uint256 _txIndex) internal {
